@@ -5,6 +5,7 @@ load_dotenv()
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.agents import create_agent
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.sqlite import SqliteSaver
 
 def get_weather(city: str):
     """Get Weather for a given city"""
@@ -30,19 +31,28 @@ system_prompt = """
             
         2. if the user provides a city, call get_weather(city) directly.
 """
-agent = create_agent(
-    model=llm,
-    tools=[get_weather, get_location],
-    system_prompt=system_prompt,
-    checkpointer=InMemorySaver(),
-)
 
-user_query1 = input("Enter your query: ")
-response1 = agent.invoke({"messages":[{'role':'user','content':user_query1}]},
-                         {"configurable":{"thread_id": "1"}})
-print(response1["messages"][-1].text)
+with SqliteSaver.from_conn_string('checkpoints.db') as checkpointer:
+    agent = create_agent(
+        model=llm,
+        tools=[get_weather, get_location],
+        system_prompt=system_prompt,
+        checkpointer=checkpointer,
+    )
+    #"InMemorySaver agent ki conversation history ko memory mein store karta hai.
+    # thread_id ek conversation ki unique identity ki tarah kaam karta hai.
+    # Same thread_id use karne par previous messages next invocation mein available rehte hain."
 
-user_query2 = input("Enter your query: ")
-response2 = agent.invoke({"messages":[{'role':'user','content':user_query2}]},
-                         {"configurable":{"thread_id": "1"}})
-print(response2["messages"][-1].text)
+    while True:
+        user_query = input("Enter your query: ")
+        if user_query in ["bye", "exit", "quit"]:
+            break
+        response = agent.invoke({"messages":[{'role':'user','content':user_query}]},
+                                 {"configurable":{"thread_id": "1"}})
+        # for i in response["messages"]:
+        #     if i.type == 'human':
+        #         print("you:", i.text)
+        #     if i.type == 'ai' and i.text:
+        #         print("Agent:", i.text)
+
+        print(response["messages"][-1].text)
