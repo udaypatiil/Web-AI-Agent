@@ -4,8 +4,9 @@ from dotenv import load_dotenv
 load_dotenv()
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.agents import create_agent
-from langgraph.checkpoint.memory import InMemorySaver
-from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.postgres import PostgresSaver
+
+DB_URI = os.getenv("SUPABASE_DB_URI")
 
 def get_weather(city: str):
     """Get Weather for a given city"""
@@ -28,11 +29,12 @@ system_prompt = """
         1. if the user ask about weather WITHOUT specifying a location you MUST:
             - first call get_location() to find their location
             - then call get_weather(city) with their location
-            
+
         2. if the user provides a city, call get_weather(city) directly.
 """
 
-with SqliteSaver.from_conn_string('checkpoints.db') as checkpointer:
+with PostgresSaver.from_conn_string(DB_URI) as checkpointer:
+    checkpointer.setup()
     agent = create_agent(
         model=llm,
         tools=[get_weather, get_location],
